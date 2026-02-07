@@ -12,12 +12,11 @@ namespace Routine.Bot.Services;
 
 public class ReminderService(
     ITelegramBotClient botClient,
-    RoutineDbContext dbContext,
+    IDbContextFactory<RoutineDbContext> dbContextFactory,
     IOptions<ReminderOptions> options,
     ILogger<ReminderService> logger) : BackgroundService
 {
     private readonly ReminderOptions _options = options.Value;
-    private readonly DateTime _now = DateTime.UtcNow;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -38,6 +37,9 @@ public class ReminderService(
 
     private async Task SendRemindersAsync(CancellationToken cancellationToken)
     {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+
         var dailyTime = ParseTime(_options.DailyTime, new TimeOnly(21, 0));
         var weeklyTime = ParseTime(_options.WeeklyTime, new TimeOnly(21, 0));
         var monthlyTime = ParseTime(_options.MonthlyTime, new TimeOnly(21, 0));
@@ -48,9 +50,9 @@ public class ReminderService(
 
         foreach (var profile in profiles)
         {
-            await HandleReminderAsync(dbContext, profile, ReminderScope.Daily, dailyTime, cancellationToken);
-            await HandleReminderAsync(dbContext, profile, ReminderScope.Weekly, weeklyTime, cancellationToken);
-            await HandleReminderAsync(dbContext, profile, ReminderScope.Monthly, monthlyTime, cancellationToken);
+            await HandleReminderAsync(dbContext, profile, ReminderScope.Daily, dailyTime, now, cancellationToken);
+            await HandleReminderAsync(dbContext, profile, ReminderScope.Weekly, weeklyTime, now, cancellationToken);
+            await HandleReminderAsync(dbContext, profile, ReminderScope.Monthly, monthlyTime, now, cancellationToken);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -61,14 +63,15 @@ public class ReminderService(
         UserProfile profile,
         ReminderScope scope,
         TimeOnly time,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        if (!IsReminderDue(scope, time, _now))
+        if (!IsReminderDue(scope, time, now))
         {
             return;
         }
 
-        var periodStart = GetPeriodStart(scope, _now);
+        var periodStart = GetPeriodStart(scope, now);
         var log = await dbContext.ReminderLogs
             .FirstOrDefaultAsync(entry => entry.UserProfileId == profile.Id && entry.Scope == scope, cancellationToken);
 
@@ -78,20 +81,32 @@ public class ReminderService(
         }
 
         var goals = await LoadGoalsAsync(dbContext, profile.Id, scope, periodStart, cancellationToken);
-        if (goals.Count == 0)
+        var plans = await LoadPlansAsync(dbContext, profile.Id, scope, periodStart, cancellationToken);
+        if (goals.Count == 0 && plans.Count == 0)
         {
             return;
         }
 
         var header = scope switch
         {
-            ReminderScope.Daily => "Хе-хей! Вот твои планы на сегодня, которые еще не выполнены:",
-            ReminderScope.Weekly => "Хе-хей! Вот цели этой недели, которые еще не выполнены:",
-            ReminderScope.Monthly => "Хе-хей! Вот цели этого месяца, которые еще не выполнены:",
-            _ => "Напоминание о целях:"
+            ReminderScope.Daily => "Хе-хей! Вот твои планы и цели на сегодня, которые еще не выполнены:",
+            ReminderScope.Weekly => "Хе-хей! Вот планы и цели этой недели, которые еще не выполнены:",
+            ReminderScope.Monthly => "Хе-хей! Вот планы и цели этого месяца, которые еще не выполнены:",
+            _ => "Напоминание о целях и планах:"
         };
 
-        var body = string.Join("\n", goals.Select(goal => $"• [{goal.Period}] {goal.Text}"));
+        var sections = new List<string>();
+        if (plans.Count > 0)
+        {
+            sections.Add("Планы:\n" + string.Join("\n", plans.Select(plan => $"• [{plan.Period}] {plan.Text}")));
+        }
+
+        if (goals.Count > 0)
+        {
+            sections.Add("Цели:\n" + string.Join("\n", goals.Select(goal => $"• [{goal.Period}] {goal.Text}")));
+        }
+
+        var body = string.Join("\n\n", sections);
         await botClient.SendMessage(profile.TelegramUserId, $"{header}\n{body}", cancellationToken: cancellationToken);
 
         if (log is null)
@@ -100,12 +115,12 @@ public class ReminderService(
             {
                 UserProfileId = profile.Id,
                 Scope = scope,
-                LastSentAt = _now
+                LastSentAt = now
             });
         }
         else
         {
-            log.LastSentAt = _now;
+            log.LastSentAt = now;
         }
     }
 
@@ -133,6 +148,34 @@ public class ReminderService(
 
         return await query
             .OrderByDescending(goal => goal.CreatedAt)
+            .Take(20)
+            .ToListAsync(cancellationToken);
+    }
+
+    private static async Task<List<Plan>> LoadPlansAsync(
+        RoutineDbContext dbContext,
+        long profileId,
+        ReminderScope scope,
+        DateTimeOffset periodStart,
+        CancellationToken cancellationToken)
+    {
+        var query = dbContext.Plans
+            .AsNoTracking()
+            .Where(plan => plan.UserProfileId == profileId && plan.CreatedAt >= periodStart);
+
+        query = scope switch
+        {
+            ReminderScope.Daily => query.Where(plan =>
+                plan.Period == PlanPeriod.Urgent ||
+                plan.Period == PlanPeriod.ThroughDay ||
+                plan.Period == PlanPeriod.Daily),
+            ReminderScope.Weekly => query.Where(plan => plan.Period == PlanPeriod.Weekly),
+            ReminderScope.Monthly => query.Where(plan => plan.Period == PlanPeriod.Monthly),
+            _ => query
+        };
+
+        return await query
+            .OrderByDescending(plan => plan.CreatedAt)
             .Take(20)
             .ToListAsync(cancellationToken);
     }

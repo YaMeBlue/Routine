@@ -1,0 +1,162 @@
+:root {
+  color-scheme: light;
+  font-family: "Inter", system-ui, sans-serif;
+  color: #0f172a;
+  background-color: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px 60px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+
+header h1 {
+  margin: 0 0 6px;
+  font-size: 32px;
+}
+
+header p {
+  margin: 0;
+  color: #475569;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.user-name {
+  font-weight: 600;
+}
+
+.user-id {
+  font-size: 12px;
+  color: #64748b;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid #cbd5f5;
+  color: #1d4ed8;
+}
+
+button.danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+button.danger:hover {
+  background: #fecaca;
+}
+
+.auth,
+.dashboard {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+}
+
+.auth h2 {
+  margin-top: 0;
+}
+
+.alert {
+  background: #e2e8f0;
+  color: #1e293b;
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin: 16px 0 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.tab.active {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+}
+
+.card-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.card-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+@media (max-width: 720px) {
+  .card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .user-info {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
