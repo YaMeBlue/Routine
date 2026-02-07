@@ -126,7 +126,7 @@ public class ReminderService(
         RoutineDbContext dbContext,
         long profileId,
         ReminderScope scope,
-        DateTimeOffset periodStart,
+        DateTime periodStart,
         CancellationToken cancellationToken)
     {
         var query = dbContext.Goals
@@ -154,7 +154,7 @@ public class ReminderService(
         RoutineDbContext dbContext,
         long profileId,
         ReminderScope scope,
-        DateTimeOffset periodStart,
+        DateTime periodStart,
         CancellationToken cancellationToken)
     {
         var query = dbContext.Plans
@@ -178,7 +178,7 @@ public class ReminderService(
             .ToListAsync(cancellationToken);
     }
 
-    private bool IsReminderDue(ReminderScope scope, TimeOnly time, DateTimeOffset now)
+    private bool IsReminderDue(ReminderScope scope, TimeOnly time, DateTime now)
     {
         var scheduled = now.Date + time.ToTimeSpan();
         if (now < scheduled)
@@ -195,22 +195,22 @@ public class ReminderService(
         };
     }
 
-    private static DateTimeOffset GetPeriodStart(ReminderScope scope, DateTimeOffset now)
+    private static DateTime GetPeriodStart(ReminderScope scope, DateTime now)
     {
         return scope switch
         {
-            ReminderScope.Daily => new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, now.Offset),
+            ReminderScope.Daily => new DateTime(now.Year, now.Month, now.Day, 0, 0, 0),
             ReminderScope.Weekly => StartOfWeek(now, DayOfWeek.Monday),
-            ReminderScope.Monthly => new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, now.Offset),
+            ReminderScope.Monthly => new DateTime(now.Year, now.Month, 1, 0, 0, 0),
             _ => now
         };
     }
 
-    private static DateTimeOffset StartOfWeek(DateTimeOffset now, DayOfWeek startOfWeek)
+    private static DateTime StartOfWeek(DateTime now, DayOfWeek startOfWeek)
     {
         var diff = (7 + (now.DayOfWeek - startOfWeek)) % 7;
         var date = now.Date.AddDays(-diff);
-        return new DateTimeOffset(date, now.Offset);
+        return date;
     }
 
     private static TimeOnly ParseTime(string? value, TimeOnly fallback)

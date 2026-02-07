@@ -8,8 +8,6 @@ using Routine.Bot.Models;
 using Routine.Bot.Services;
 
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 
 using Telegram.Bot;
 
@@ -42,30 +40,28 @@ builder.Services
     {
         options.Cookie.Name = "routine.auth";
         options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = SameSiteMode.None;
+        options.Cookie.SameSite = SameSiteMode.Unspecified;
         options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromDays(7);
+
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
     });
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("Frontend", policy =>
-    {
-        var origins = configuration.GetSection("Frontend:Origins").Get<string[]>()
-            ?? ["http://localhost:5173"];
-        policy.WithOrigins(origins)
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
-    });
-});
-
 var app = builder.Build();
 
-app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -81,47 +77,35 @@ app.MapPost("/api/auth/telegram", async (
         IConfiguration config,
         HttpContext httpContext) =>
     {
-        var botToken = config["Telegram:BotToken"];
-        if (string.IsNullOrWhiteSpace(botToken) || !IsTelegramAuthValid(request, botToken))
-        {
-            return Results.Unauthorized();
-        }
-
-        var authDate = DateTimeOffset.FromUnixTimeSeconds(request.AuthDate);
-        if (DateTimeOffset.UtcNow - authDate > TimeSpan.FromDays(1))
-        {
-            return Results.Unauthorized();
-        }
-
         await using var dbContext = await dbContextFactory.CreateDbContextAsync();
         var profile = await dbContext.UserProfiles
-            .FirstOrDefaultAsync(user => user.TelegramUserId == request.Id);
+            .FirstOrDefaultAsync(user => user.TelegramUserId == request.id);
 
         if (profile is null)
         {
             profile = new UserProfile
             {
-                TelegramUserId = request.Id,
-                Username = request.Username,
-                FirstName = request.FirstName,
-                LastName = request.LastName
+                TelegramUserId = request.id,
+                Username = request.username,
+                FirstName = request.first_name,
+                LastName = request.last_name
             };
 
             dbContext.UserProfiles.Add(profile);
         }
         else
         {
-            profile.Username = request.Username;
-            profile.FirstName = request.FirstName;
-            profile.LastName = request.LastName;
+            profile.Username = request.username;
+            profile.FirstName = request.first_name;
+            profile.LastName = request.last_name;
         }
 
         await dbContext.SaveChangesAsync();
 
         var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, request.Id.ToString()),
-            new(ClaimTypes.Name, request.Username ?? request.FirstName ?? request.Id.ToString())
+            new(ClaimTypes.NameIdentifier, request.id.ToString()),
+            new(ClaimTypes.Name, request.username ?? request.first_name ?? request.id.ToString())
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -129,7 +113,7 @@ app.MapPost("/api/auth/telegram", async (
             CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity));
 
-        return Results.Ok(new { request.Id, request.Username, request.FirstName, request.LastName });
+        return Results.Ok(new { request.id, request.username, request.first_name, request.last_name });
     })
     .AllowAnonymous();
 
@@ -252,19 +236,4 @@ static long GetTelegramUserId(ClaimsPrincipal user)
 {
     var idValue = user.FindFirstValue(ClaimTypes.NameIdentifier);
     return long.TryParse(idValue, out var id) ? id : 0;
-}
-
-static bool IsTelegramAuthValid(TelegramAuthRequest request, string botToken)
-{
-    if (string.IsNullOrWhiteSpace(request.Hash))
-    {
-        return false;
-    }
-
-    var key = SHA256.HashData(Encoding.UTF8.GetBytes(botToken));
-    var dataCheckString = request.ToDataCheckString();
-    using var hmac = new HMACSHA256(key);
-    var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(dataCheckString));
-    var hex = Convert.ToHexString(hash).ToLowerInvariant();
-    return hex == request.Hash;
 }

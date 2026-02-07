@@ -157,7 +157,10 @@ export default function App() {
                   <span>{new Date(goal.createdAt).toLocaleString()}</span>
                 </div>
               </div>
-              <button className="danger" onClick={() => handleDeleteGoal(goal.id)}>
+              <button
+                className="danger"
+                onClick={() => handleDeleteGoal(goal.id)}
+              >
                 Удалить
               </button>
             </div>
@@ -179,7 +182,10 @@ export default function App() {
                 <span>{new Date(plan.createdAt).toLocaleString()}</span>
               </div>
             </div>
-            <button className="danger" onClick={() => handleDeletePlan(plan.id)}>
+            <button
+              className="danger"
+              onClick={() => handleDeletePlan(plan.id)}
+            >
               Удалить
             </button>
           </div>
@@ -217,7 +223,9 @@ export default function App() {
           {botUsername ? (
             <div id="telegram-login" />
           ) : (
-            <div className="alert">Укажи Telegram BotUsername в настройках.</div>
+            <div className="alert">
+              Укажи Telegram BotUsername в настройках.
+            </div>
           )}
         </section>
       )}
