@@ -1,11 +1,11 @@
-# Routine Telegram Diary Bot
+# Routine Dashboard
 
-A .NET 8 Telegram bot that acts as a personal diary and structured planning assistant. It accepts text or voice messages, classifies them into goal periods (urgent, through day, daily, weekly, monthly, life), and stores goals and notes in SQLite.
+A .NET 8 backend with a React + TypeScript dashboard for managing goals and plans. Users sign in with Telegram, review and delete their items, and receive reminder notifications from the Telegram bot.
 
 ## Features
-- Text + voice intake (voice is transcribed with OpenAI Whisper if configured).
-- AI classification into goal periods using OpenAI Chat Completions (fallback to heuristics).
-- Commands to list goals and notes with filtering.
+- React + TypeScript dashboard with tabs for goals and plans.
+- Telegram login for web authentication.
+- Telegram bot notifications for daily/weekly/monthly reminders.
 
 ## Configuration
 Create `Routine.Bot/appsettings.json` or set environment variables:
@@ -13,27 +13,35 @@ Create `Routine.Bot/appsettings.json` or set environment variables:
 ```json
 {
   "Telegram": {
-    "BotToken": "<YOUR_TOKEN>"
-  },
-  "OpenAI": {
-    "ApiKey": "<OPTIONAL>",
-    "Model": "gpt-4o-mini",
-    "BaseUrl": "https://api.openai.com/v1"
+    "BotToken": "<YOUR_TOKEN>",
+    "BotUsername": "<YOUR_BOT_USERNAME>"
   },
   "ConnectionStrings": {
     "Routine": "Data Source=routine.db"
+  },
+  "Reminders": {
+    "DailyTime": "21:00",
+    "WeeklyTime": "21:00",
+    "MonthlyTime": "21:00",
+    "WeeklyDay": "Sunday"
+  },
+  "Frontend": {
+    "Origins": ["http://localhost:5173"]
   }
 }
 ```
 
 Environment variable equivalents:
 - `Telegram__BotToken`
-- `OpenAI__ApiKey`
-- `OpenAI__Model`
-- `OpenAI__BaseUrl`
+- `Telegram__BotUsername`
 - `ConnectionStrings__Routine`
+- `Reminders__DailyTime`
+- `Reminders__WeeklyTime`
+- `Reminders__MonthlyTime`
+- `Reminders__WeeklyDay`
+- `Frontend__Origins__0`
 
-## Run
+## Run backend
 ```bash
 cd Routine.Bot
 
@@ -42,13 +50,11 @@ dotnet restore
 dotnet run
 ```
 
-## Usage
-- Send a message like: `invest 3k$ monthly` → stored as monthly goal.
-- Send a note like: `note: I feel low energy today` → stored as note.
-- Commands:
-  - `/goals [period]`
-  - `/notes [since-date]`
-  - `/goal <period> <text>`
-  - `/note <text>`
+## Run frontend
+```bash
+cd Routine.Bot/ClientApp
 
-Example periods: `urgent`, `through_day`, `daily`, `weekly`, `monthly`, `life`.
+npm install
+
+npm run dev
+```
