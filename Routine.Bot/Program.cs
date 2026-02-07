@@ -1,7 +1,3 @@
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
-
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +6,10 @@ using Routine.Bot.Contracts;
 using Routine.Bot.Infrastructure;
 using Routine.Bot.Models;
 using Routine.Bot.Services;
+
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 
 using Telegram.Bot;
 

@@ -1,6 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using Routine.Bot.Infrastructure;
@@ -38,7 +36,7 @@ public class ReminderService(
     private async Task SendRemindersAsync(CancellationToken cancellationToken)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var now = DateTimeOffset.UtcNow;
+        var now = DateTime.UtcNow;
 
         var dailyTime = ParseTime(_options.DailyTime, new TimeOnly(21, 0));
         var weeklyTime = ParseTime(_options.WeeklyTime, new TimeOnly(21, 0));
@@ -63,7 +61,7 @@ public class ReminderService(
         UserProfile profile,
         ReminderScope scope,
         TimeOnly time,
-        DateTimeOffset now,
+        DateTime now,
         CancellationToken cancellationToken)
     {
         if (!IsReminderDue(scope, time, now))
