@@ -66,7 +66,7 @@ public class AiClassifier(HttpClient httpClient, IConfiguration configuration, I
             }
 
             var payload = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(cancellationToken: cancellationToken);
-            var content = payload?.Choices.FirstOrDefault()?.Message?.Content;
+            var content = payload?.Choices[0]?.Message?.Content;
             if (string.IsNullOrWhiteSpace(content))
             {
                 return null;

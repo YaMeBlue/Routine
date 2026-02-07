@@ -14,7 +14,6 @@ namespace Routine.Bot.Services;
 
 public class TelegramBotService(
     ITelegramBotClient botClient,
-    IServiceProvider serviceProvider,
     ILogger<TelegramBotService> logger,
     RoutineDbContext dbContext,
     AiClassifier classifier,

@@ -6,5 +6,5 @@ public class ReminderLog
     public long UserProfileId { get; set; }
     public UserProfile? UserProfile { get; set; }
     public ReminderScope Scope { get; set; }
-    public DateTimeOffset LastSentAt { get; set; } = DateTimeOffset.MinValue;
+    public DateTime LastSentAt { get; set; } = DateTime.Now;
 }
