@@ -2,8 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+
 using Routine.Bot.Infrastructure;
 using Routine.Bot.Services;
+
 using Telegram.Bot;
 
 var host = Host.CreateDefaultBuilder(args)

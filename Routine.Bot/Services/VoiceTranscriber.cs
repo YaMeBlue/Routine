@@ -1,24 +1,16 @@
-using System.Net.Http.Headers;
-using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+
 namespace Routine.Bot.Services;
 
-public class VoiceTranscriber
+public class VoiceTranscriber(HttpClient httpClient, IConfiguration configuration, ILogger<VoiceTranscriber> logger)
 {
-    private readonly HttpClient _httpClient;
-    private readonly ILogger<VoiceTranscriber> _logger;
-    private readonly string? _apiKey;
-    private readonly string _baseUrl;
-
-    public VoiceTranscriber(HttpClient httpClient, IConfiguration configuration, ILogger<VoiceTranscriber> logger)
-    {
-        _httpClient = httpClient;
-        _logger = logger;
-        _apiKey = configuration["OpenAI:ApiKey"];
-        _baseUrl = configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com/v1";
-    }
+    private readonly string? _apiKey = configuration["OpenAI:ApiKey"];
+    private readonly string _baseUrl = configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com/v1";
 
     public async Task<string?> TranscribeAsync(Stream audio, string fileName, CancellationToken cancellationToken)
     {
@@ -39,10 +31,10 @@ public class VoiceTranscriber
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
             request.Content = form;
 
-            var response = await _httpClient.SendAsync(request, cancellationToken);
+            var response = await httpClient.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("OpenAI transcription failed with status {Status}", response.StatusCode);
+                logger.LogWarning("OpenAI transcription failed with status {Status}", response.StatusCode);
                 return null;
             }
 
@@ -56,7 +48,7 @@ public class VoiceTranscriber
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "OpenAI transcription failed");
+            logger.LogWarning(ex, "OpenAI transcription failed");
             return null;
         }
     }

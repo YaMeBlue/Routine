@@ -1,28 +1,20 @@
-using System.Net.Http.Headers;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+
 using Routine.Bot.Models;
+
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Routine.Bot.Services;
 
-public class AiClassifier
+public class AiClassifier(HttpClient httpClient, IConfiguration configuration, ILogger<AiClassifier> logger)
 {
-    private readonly HttpClient _httpClient;
-    private readonly ILogger<AiClassifier> _logger;
-    private readonly string? _apiKey;
-    private readonly string _model;
-    private readonly string _baseUrl;
-
-    public AiClassifier(HttpClient httpClient, IConfiguration configuration, ILogger<AiClassifier> logger)
-    {
-        _httpClient = httpClient;
-        _logger = logger;
-        _apiKey = configuration["OpenAI:ApiKey"];
-        _model = configuration["OpenAI:Model"] ?? "gpt-4o-mini";
-        _baseUrl = configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com/v1";
-    }
+    private readonly string? _apiKey = configuration["OpenAI:ApiKey"];
+    private readonly string _model = configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+    private readonly string _baseUrl = configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com/v1";
 
     public async Task<AiClassificationResult> ClassifyAsync(string input, CancellationToken cancellationToken)
     {
@@ -50,25 +42,24 @@ public class AiClassifier
         {
             var request = new ChatCompletionRequest(
                 _model,
-                new List<ChatMessage>
-                {
+                [
                     new("system",
                         "You are a planner assistant for a diary bot. " +
                         "Classify messages into goal or note. " +
                         "If it is a goal, pick one period: urgent, through_day, daily, weekly, monthly, life. " +
                         "Return compact JSON with keys: isGoal (bool), period (string|null), text (string)."),
                     new("user", input)
-                },
+                ],
                 new ChatResponseFormat("json_object"));
 
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl.TrimEnd('/')}/chat/completions");
             httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
             httpRequest.Content = JsonContent.Create(request);
 
-            var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+            var response = await httpClient.SendAsync(httpRequest, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("OpenAI classification failed with status {Status}", response.StatusCode);
+                logger.LogWarning("OpenAI classification failed with status {Status}", response.StatusCode);
                 return null;
             }
 
@@ -92,7 +83,7 @@ public class AiClassifier
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "OpenAI classification failed");
+            logger.LogWarning(ex, "OpenAI classification failed");
             return null;
         }
     }
@@ -108,12 +99,14 @@ public class AiClassifier
         var period = FindPeriod(lower);
         var isGoal = period is not null;
 
-        if (!isGoal)
+        if (isGoal)
         {
-            if (lower.Contains("i feel") || lower.Contains("mood") || lower.Contains("feeling"))
-            {
-                return new AiClassificationResult(false, null, input);
-            }
+            return new AiClassificationResult(isGoal, period, input);
+        }
+
+        if (lower.Contains("i feel") || lower.Contains("mood") || lower.Contains("feeling"))
+        {
+            return new AiClassificationResult(false, null, input);
         }
 
         return new AiClassificationResult(isGoal, period, input);

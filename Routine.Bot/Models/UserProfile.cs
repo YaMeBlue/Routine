@@ -8,6 +8,6 @@ public class UserProfile
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
 
-    public ICollection<Goal> Goals { get; set; } = new List<Goal>();
-    public ICollection<Note> Notes { get; set; } = new List<Note>();
+    public ICollection<Goal> Goals { get; set; }
+    public ICollection<Note> Notes { get; set; }
 }

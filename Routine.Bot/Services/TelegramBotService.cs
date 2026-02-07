@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+
 using Routine.Bot.Infrastructure;
 using Routine.Bot.Models;
+
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
@@ -11,40 +12,23 @@ using Telegram.Bot.Types.Enums;
 
 namespace Routine.Bot.Services;
 
-public class TelegramBotService : BackgroundService
+public class TelegramBotService(
+    ITelegramBotClient botClient,
+    IServiceProvider serviceProvider,
+    ILogger<TelegramBotService> logger,
+    RoutineDbContext dbContext,
+    AiClassifier classifier,
+    VoiceTranscriber transcriber) : BackgroundService
 {
-    private readonly ITelegramBotClient _botClient;
-    private readonly IConfiguration _configuration;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<TelegramBotService> _logger;
-    private readonly AiClassifier _classifier;
-    private readonly VoiceTranscriber _transcriber;
-
-    public TelegramBotService(
-        ITelegramBotClient botClient,
-        IConfiguration configuration,
-        IServiceProvider serviceProvider,
-        ILogger<TelegramBotService> logger,
-        AiClassifier classifier,
-        VoiceTranscriber transcriber)
-    {
-        _botClient = botClient;
-        _configuration = configuration;
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-        _classifier = classifier;
-        _transcriber = transcriber;
-    }
-
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var receiverOptions = new ReceiverOptions
         {
-            AllowedUpdates = new[] { UpdateType.Message }
+            AllowedUpdates = [UpdateType.Message]
         };
 
-        _botClient.StartReceiving(HandleUpdateAsync, HandleErrorAsync, receiverOptions, stoppingToken);
-        _logger.LogInformation("Telegram bot is listening");
+        botClient.StartReceiving(HandleUpdateAsync, HandleErrorAsync, receiverOptions, stoppingToken);
+        logger.LogInformation("Telegram bot is listening");
         return Task.CompletedTask;
     }
 
@@ -55,13 +39,12 @@ public class TelegramBotService : BackgroundService
             return;
         }
 
-        var userId = message.From.Id;
         var chatId = message.Chat.Id;
         var text = message.Text?.Trim() ?? string.Empty;
 
-        if (message.Type == MessageType.Text && text.StartsWith("/"))
+        if (message.Type == MessageType.Text && text.StartsWith('/'))
         {
-            await HandleCommandAsync(chatId, userId, message.From, text, cancellationToken);
+            await HandleCommandAsync(chatId, message.From, text, cancellationToken);
             return;
         }
 
@@ -71,7 +54,7 @@ public class TelegramBotService : BackgroundService
             contentText = await TranscribeVoiceAsync(message.Voice, cancellationToken) ?? string.Empty;
             if (string.IsNullOrWhiteSpace(contentText))
             {
-                await botClient.SendTextMessageAsync(chatId,
+                await botClient.SendMessage(chatId,
                     "I received a voice message but could not transcribe it yet. " +
                     "Please try again or send text.",
                     cancellationToken: cancellationToken);
@@ -81,15 +64,13 @@ public class TelegramBotService : BackgroundService
 
         if (string.IsNullOrWhiteSpace(contentText))
         {
-            await botClient.SendTextMessageAsync(chatId, "Send text or a voice note.", cancellationToken: cancellationToken);
+            await botClient.SendMessage(chatId, "Send text or a voice note.", cancellationToken: cancellationToken);
             return;
         }
 
-        await using var scope = _serviceProvider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<RoutineDbContext>();
         var profile = await GetOrCreateUserAsync(dbContext, message.From, cancellationToken);
 
-        var classification = await _classifier.ClassifyAsync(contentText, cancellationToken);
+        var classification = await classifier.ClassifyAsync(contentText, cancellationToken);
         if (classification.IsGoal && classification.Period is not null)
         {
             var goal = new Goal
@@ -101,7 +82,7 @@ public class TelegramBotService : BackgroundService
             dbContext.Goals.Add(goal);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            await botClient.SendTextMessageAsync(chatId,
+            await botClient.SendMessage(chatId,
                 $"Saved goal for {classification.Period.Value}.",
                 cancellationToken: cancellationToken);
         }
@@ -115,13 +96,13 @@ public class TelegramBotService : BackgroundService
             dbContext.Notes.Add(note);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            await botClient.SendTextMessageAsync(chatId,
+            await botClient.SendMessage(chatId,
                 "Saved note.",
                 cancellationToken: cancellationToken);
         }
     }
 
-    private async Task HandleCommandAsync(long chatId, long userId, User user, string text, CancellationToken cancellationToken)
+    private async Task HandleCommandAsync(long chatId, User user, string text, CancellationToken cancellationToken)
     {
         var parts = text.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
         var command = parts[0].ToLowerInvariant();
@@ -131,7 +112,7 @@ public class TelegramBotService : BackgroundService
         {
             case "/start":
             case "/help":
-                await _botClient.SendTextMessageAsync(chatId, GetHelpText(), cancellationToken: cancellationToken);
+                await botClient.SendMessage(chatId, GetHelpText(), cancellationToken: cancellationToken);
                 break;
             case "/goals":
                 await SendGoalsAsync(chatId, user, argument, cancellationToken);
@@ -146,15 +127,13 @@ public class TelegramBotService : BackgroundService
                 await SaveManualGoalAsync(chatId, user, argument, cancellationToken);
                 break;
             default:
-                await _botClient.SendTextMessageAsync(chatId, "Unknown command. Type /help.", cancellationToken: cancellationToken);
+                await botClient.SendMessage(chatId, "Unknown command. Type /help.", cancellationToken: cancellationToken);
                 break;
         }
     }
 
     private async Task SendGoalsAsync(long chatId, User user, string argument, CancellationToken cancellationToken)
     {
-        await using var scope = _serviceProvider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<RoutineDbContext>();
         var profile = await GetOrCreateUserAsync(dbContext, user, cancellationToken);
 
         var period = ParsePeriod(argument);
@@ -171,19 +150,17 @@ public class TelegramBotService : BackgroundService
 
         if (goals.Count == 0)
         {
-            await _botClient.SendTextMessageAsync(chatId, "No goals found for that period.", cancellationToken: cancellationToken);
+            await botClient.SendMessage(chatId, "No goals found for that period.", cancellationToken: cancellationToken);
             return;
         }
 
         var header = period is null ? "Your latest goals:" : $"Your {period} goals:";
         var body = string.Join("\n", goals.Select(goal => $"• [{goal.Period}] {goal.Text}"));
-        await _botClient.SendTextMessageAsync(chatId, $"{header}\n{body}", cancellationToken: cancellationToken);
+        await botClient.SendMessage(chatId, $"{header}\n{body}", cancellationToken: cancellationToken);
     }
 
     private async Task SendNotesAsync(long chatId, User user, string argument, CancellationToken cancellationToken)
     {
-        await using var scope = _serviceProvider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<RoutineDbContext>();
         var profile = await GetOrCreateUserAsync(dbContext, user, cancellationToken);
 
         var query = dbContext.Notes.AsNoTracking().Where(note => note.UserProfileId == profile.Id);
@@ -194,30 +171,28 @@ public class TelegramBotService : BackgroundService
 
         if (!string.IsNullOrWhiteSpace(argument) && DateTimeOffset.TryParse(argument, out var since))
         {
-            notes = notes.Where(note => note.CreatedAt >= since).ToList();
+            notes = [.. notes.Where(note => note.CreatedAt >= since)];
         }
 
         if (notes.Count == 0)
         {
-            await _botClient.SendTextMessageAsync(chatId, "No notes found.", cancellationToken: cancellationToken);
+            await botClient.SendMessage(chatId, "No notes found.", cancellationToken: cancellationToken);
             return;
         }
 
         var header = "Your latest notes:";
         var body = string.Join("\n", notes.Select(note => $"• {note.CreatedAt:g} {note.Text}"));
-        await _botClient.SendTextMessageAsync(chatId, $"{header}\n{body}", cancellationToken: cancellationToken);
+        await botClient.SendMessage(chatId, $"{header}\n{body}", cancellationToken: cancellationToken);
     }
 
     private async Task SaveManualNoteAsync(long chatId, User user, string text, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            await _botClient.SendTextMessageAsync(chatId, "Usage: /note I felt great today", cancellationToken: cancellationToken);
+            await botClient.SendMessage(chatId, "Usage: /note I felt great today", cancellationToken: cancellationToken);
             return;
         }
 
-        await using var scope = _serviceProvider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<RoutineDbContext>();
         var profile = await GetOrCreateUserAsync(dbContext, user, cancellationToken);
 
         dbContext.Notes.Add(new Note
@@ -227,14 +202,14 @@ public class TelegramBotService : BackgroundService
         });
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        await _botClient.SendTextMessageAsync(chatId, "Saved note.", cancellationToken: cancellationToken);
+        await botClient.SendMessage(chatId, "Saved note.", cancellationToken: cancellationToken);
     }
 
     private async Task SaveManualGoalAsync(long chatId, User user, string argument, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(argument))
         {
-            await _botClient.SendTextMessageAsync(chatId,
+            await botClient.SendMessage(chatId,
                 "Usage: /goal monthly Invest $3k monthly",
                 cancellationToken: cancellationToken);
             return;
@@ -243,7 +218,7 @@ public class TelegramBotService : BackgroundService
         var pieces = argument.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
         if (pieces.Length < 2)
         {
-            await _botClient.SendTextMessageAsync(chatId,
+            await botClient.SendMessage(chatId,
                 "Usage: /goal monthly Invest $3k monthly",
                 cancellationToken: cancellationToken);
             return;
@@ -252,14 +227,12 @@ public class TelegramBotService : BackgroundService
         var period = ParsePeriod(pieces[0]);
         if (period is null)
         {
-            await _botClient.SendTextMessageAsync(chatId,
+            await botClient.SendMessage(chatId,
                 "Unknown period. Use urgent, through_day, daily, weekly, monthly, life.",
                 cancellationToken: cancellationToken);
             return;
         }
 
-        await using var scope = _serviceProvider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<RoutineDbContext>();
         var profile = await GetOrCreateUserAsync(dbContext, user, cancellationToken);
 
         dbContext.Goals.Add(new Goal
@@ -270,10 +243,10 @@ public class TelegramBotService : BackgroundService
         });
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        await _botClient.SendTextMessageAsync(chatId, "Saved goal.", cancellationToken: cancellationToken);
+        await botClient.SendMessage(chatId, "Saved goal.", cancellationToken: cancellationToken);
     }
 
-    private async Task<UserProfile> GetOrCreateUserAsync(RoutineDbContext dbContext, User user, CancellationToken cancellationToken)
+    private static async Task<UserProfile> GetOrCreateUserAsync(RoutineDbContext dbContext, User user, CancellationToken cancellationToken)
     {
         var profile = await dbContext.UserProfiles
             .FirstOrDefaultAsync(profile => profile.TelegramUserId == user.Id, cancellationToken);
@@ -302,11 +275,11 @@ public class TelegramBotService : BackgroundService
 
     private async Task<string?> TranscribeVoiceAsync(Voice voice, CancellationToken cancellationToken)
     {
-        var file = await _botClient.GetFileAsync(voice.FileId, cancellationToken);
+        var file = await botClient.GetFile(voice.FileId, cancellationToken);
         await using var stream = new MemoryStream();
-        await _botClient.DownloadFileAsync(file.FilePath!, stream, cancellationToken);
+        await botClient.DownloadFile(file.FilePath!, stream, cancellationToken);
         stream.Position = 0;
-        return await _transcriber.TranscribeAsync(stream, "voice.ogg", cancellationToken);
+        return await transcriber.TranscribeAsync(stream, "voice.ogg", cancellationToken);
     }
 
     private static PlanPeriod? ParsePeriod(string? input)
@@ -341,7 +314,7 @@ public class TelegramBotService : BackgroundService
 
     private Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
     {
-        _logger.LogError(exception, "Telegram bot error");
+        logger.LogError(exception, "Telegram bot error");
         return Task.CompletedTask;
     }
 }

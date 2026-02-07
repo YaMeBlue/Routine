@@ -1,14 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+
 using Routine.Bot.Models;
 
 namespace Routine.Bot.Infrastructure;
 
-public class RoutineDbContext : DbContext
+public class RoutineDbContext(DbContextOptions<RoutineDbContext> options) : DbContext(options)
 {
-    public RoutineDbContext(DbContextOptions<RoutineDbContext> options) : base(options)
-    {
-    }
-
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<Goal> Goals => Set<Goal>();
     public DbSet<Note> Notes => Set<Note>();
