@@ -30,10 +30,13 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddHttpClient<AiClassifier>();
         services.AddHttpClient<VoiceTranscriber>();
 
+        services.Configure<ReminderOptions>(configuration.GetSection("Reminders"));
+
         services.AddSingleton<ITelegramBotClient>(_ => new TelegramBotClient(token));
         services.AddSingleton<AiClassifier>();
         services.AddSingleton<VoiceTranscriber>();
         services.AddHostedService<TelegramBotService>();
+        services.AddHostedService<ReminderService>();
     })
     .Build();
 

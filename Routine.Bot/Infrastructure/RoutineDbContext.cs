@@ -9,6 +9,7 @@ public class RoutineDbContext(DbContextOptions<RoutineDbContext> options) : DbCo
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<Goal> Goals => Set<Goal>();
     public DbSet<Note> Notes => Set<Note>();
+    public DbSet<ReminderLog> ReminderLogs => Set<ReminderLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,5 +26,10 @@ public class RoutineDbContext(DbContextOptions<RoutineDbContext> options) : DbCo
             .HasMany(profile => profile.Notes)
             .WithOne(note => note.UserProfile)
             .HasForeignKey(note => note.UserProfileId);
+
+        modelBuilder.Entity<UserProfile>()
+            .HasMany(profile => profile.ReminderLogs)
+            .WithOne(log => log.UserProfile)
+            .HasForeignKey(log => log.UserProfileId);
     }
 }
