@@ -45,8 +45,10 @@ public class AiClassifier(HttpClient httpClient, IConfiguration configuration, I
                 [
                     new("system",
                         "You are a planner assistant for a diary bot. " +
-                        "Classify messages into goal or note. " +
+                        "Classify messages into goal or note by context, including Russian text. " +
                         "If it is a goal, pick one period: urgent, through_day, daily, weekly, monthly, life. " +
+                        "Infer the period from context (today, this week, monthly, etc). " +
+                        "If no explicit period is present but it is clearly a goal, default to through_day. " +
                         "Return compact JSON with keys: isGoal (bool), period (string|null), text (string)."),
                     new("user", input)
                 ],
@@ -96,17 +98,23 @@ public class AiClassifier(HttpClient httpClient, IConfiguration configuration, I
         }
 
         var lower = input.ToLowerInvariant();
+        if (lower.StartsWith("заметка:"))
+        {
+            return new AiClassificationResult(false, null, input[8..].Trim());
+        }
+
+        if (LooksLikeNote(lower))
+        {
+            return new AiClassificationResult(false, null, input);
+        }
+
         var period = FindPeriod(lower);
-        var isGoal = period is not null;
+        var isGoal = period is not null || LooksLikeGoal(lower);
 
         if (isGoal)
         {
+            period ??= PlanPeriod.ThroughDay;
             return new AiClassificationResult(isGoal, period, input);
-        }
-
-        if (lower.Contains("i feel") || lower.Contains("mood") || lower.Contains("feeling"))
-        {
-            return new AiClassificationResult(false, null, input);
         }
 
         return new AiClassificationResult(isGoal, period, input);
@@ -115,12 +123,55 @@ public class AiClassifier(HttpClient httpClient, IConfiguration configuration, I
     private static PlanPeriod? FindPeriod(string input)
     {
         if (input.Contains("urgent")) return PlanPeriod.Urgent;
-        if (input.Contains("through day") || input.Contains("through-day") || input.Contains("today")) return PlanPeriod.ThroughDay;
-        if (input.Contains("daily") || input.Contains("every day")) return PlanPeriod.Daily;
-        if (input.Contains("weekly") || input.Contains("every week")) return PlanPeriod.Weekly;
-        if (input.Contains("monthly") || input.Contains("every month")) return PlanPeriod.Monthly;
+        if (input.Contains("срочно")) return PlanPeriod.Urgent;
+        if (input.Contains("through day") || input.Contains("through-day") || input.Contains("today") || input.Contains("сегодня")) return PlanPeriod.ThroughDay;
+        if (input.Contains("daily") || input.Contains("every day") || input.Contains("каждый день") || input.Contains("ежедневно")) return PlanPeriod.Daily;
+        if (input.Contains("weekly") || input.Contains("every week") || input.Contains("каждую неделю") || input.Contains("еженедельно") || input.Contains("на этой неделе")) return PlanPeriod.Weekly;
+        if (input.Contains("monthly") || input.Contains("every month") || input.Contains("каждый месяц") || input.Contains("ежемесячно") || input.Contains("в этом месяце")) return PlanPeriod.Monthly;
         if (input.Contains("life") || input.Contains("long term") || input.Contains("long-term")) return PlanPeriod.Life;
         return null;
+    }
+
+    private static bool LooksLikeNote(string input)
+    {
+        return input.Contains("i feel") ||
+               input.Contains("mood") ||
+               input.Contains("feeling") ||
+               input.Contains("journal") ||
+               input.Contains("reflection") ||
+               input.Contains("заметка") ||
+               input.Contains("мысл") ||
+               input.Contains("наблюден") ||
+               input.Contains("чувств") ||
+               input.Contains("настроен") ||
+               input.Contains("дневник") ||
+               input.Contains("итоги") ||
+               input.Contains("сегодня было") ||
+               input.Contains("сегодня я");
+    }
+
+    private static bool LooksLikeGoal(string input)
+    {
+        return input.Contains("need to") ||
+               input.Contains("i need") ||
+               input.Contains("i have to") ||
+               input.Contains("plan to") ||
+               input.Contains("todo") ||
+               input.Contains("task") ||
+               input.Contains("goal") ||
+               input.Contains("надо") ||
+               input.Contains("нужно") ||
+               input.Contains("хочу") ||
+               input.Contains("план") ||
+               input.Contains("сделать") ||
+               input.Contains("купить") ||
+               input.Contains("позвонить") ||
+               input.Contains("написать") ||
+               input.Contains("подготовить") ||
+               input.Contains("записаться") ||
+               input.Contains("отправить") ||
+               input.Contains("сегодня") ||
+               input.Contains("завтра");
     }
 
     private static PlanPeriod? ParsePeriod(string? period)

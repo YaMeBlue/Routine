@@ -10,4 +10,5 @@ public class UserProfile
 
     public ICollection<Goal> Goals { get; set; }
     public ICollection<Note> Notes { get; set; }
+    public ICollection<ReminderLog> ReminderLogs { get; set; }
 }
