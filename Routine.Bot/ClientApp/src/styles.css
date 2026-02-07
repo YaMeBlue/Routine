@@ -284,6 +284,7 @@ button.danger:hover {
 .tile-title {
   font-weight: 600;
   font-size: 15px;
+  color: black;
 }
 
 .detail-overlay {
@@ -411,6 +412,7 @@ button.danger:hover {
 .history-title {
   font-weight: 600;
   font-size: 13px;
+  color: black;
 }
 
 .history-meta {
