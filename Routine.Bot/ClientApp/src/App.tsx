@@ -1,135 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, GoalItem, PlanItem, UserProfile } from "./api";
-
-const tabs = ["Цели", "Планы", "Добавить", "Дашборд", "Обновления"] as const;
-
-type TabKey = (typeof tabs)[number];
-
-type TelegramAuthPayload = {
-  id: number;
-  first_name?: string;
-  last_name?: string;
-  username?: string;
-  photo_url?: string;
-  auth_date: number;
-  hash: string;
-};
-
-type GoalPlanType = "goal" | "plan";
-
-type HistoryEntryType = "update" | "chat" | "tag" | "progress";
-
-type ChatMessage = {
-  id: string;
-  author: "user" | "assistant";
-  text: string;
-  timestamp: string;
-};
-
-type HistoryEntry = {
-  id: string;
-  type: HistoryEntryType;
-  title: string;
-  detail?: string;
-  timestamp: string;
-  messages?: ChatMessage[];
-};
-
-type GoalPlanRecord = {
-  id: string;
-  source: "api" | "local";
-  kind: GoalPlanType;
-  title: string;
-  period: string;
-  createdAt: string;
-  progress: number;
-  tags: string[];
-  description?: string;
-  history: HistoryEntry[];
-  chats: ChatMessage[];
-};
-
-const tagPalette = [
-  "#fee2e2",
-  "#fde68a",
-  "#bfdbfe",
-  "#c7d2fe",
-  "#bbf7d0",
-  "#fecdd3",
-  "#f5d0fe",
-  "#bae6fd",
-  "#e2e8f0",
-  "#ddd6fe"
-];
-
-const tagTextPalette = [
-  "#b91c1c",
-  "#92400e",
-  "#1d4ed8",
-  "#4338ca",
-  "#166534",
-  "#9f1239",
-  "#7e22ce",
-  "#075985",
-  "#334155",
-  "#5b21b6"
-];
-
-const periodBuckets = [
-  { key: "day", label: "Сегодня" },
-  { key: "week", label: "На неделю" },
-  { key: "month", label: "На месяц" },
-  { key: "year", label: "На год" },
-  { key: "life", label: "На жизнь" }
-] as const;
-
-type PeriodBucketKey = (typeof periodBuckets)[number]["key"];
-
-const hashString = (value: string) =>
-  value.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-
-const getTagStyle = (tag: string) => {
-  const index = hashString(tag) % tagPalette.length;
-  return {
-    background: tagPalette[index],
-    color: tagTextPalette[index]
-  };
-};
-
-const createId = () => Math.random().toString(36).slice(2, 10);
-
-const buildDefaultTags = (title: string, kind: GoalPlanType) => {
-  const words = title
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((word) => word.length > 4)
-    .slice(0, 2);
-  const base = kind === "goal" ? "цель" : "план";
-  return Array.from(new Set([base, ...words]));
-};
-
-const getBucketKey = (period: string): PeriodBucketKey => {
-  const value = period.toLowerCase();
-  if (value.includes("день") || value.includes("сегодня")) {
-    return "day";
-  }
-  if (value.includes("нед")) {
-    return "week";
-  }
-  if (value.includes("месяц")) {
-    return "month";
-  }
-  if (value.includes("год")) {
-    return "year";
-  }
-  return "life";
-};
-
-const normalizePeriodLabel = (period: string) => {
-  const key = getBucketKey(period);
-  const bucket = periodBuckets.find((item) => item.key === key);
-  return bucket ? bucket.label : period;
-};
+import { AuthSection } from "./components/AuthSection";
+import { DetailOverlay } from "./components/DetailOverlay";
+import { Header } from "./components/Header";
+import { AddRecordForm } from "./components/AddRecordForm";
+import { RecordsList } from "./components/RecordsList";
+import { Dashboard } from "./components/Dashboard";
+import { TabsNav } from "./components/TabsNav";
+import { UpdatesForm } from "./components/UpdatesForm";
+import { periodBuckets, tabs } from "./constants";
+import {
+  AddFormState,
+  GoalPlanRecord,
+  GoalPlanType,
+  PeriodBucketKey,
+  TabKey,
+  TelegramAuthPayload
+} from "./types";
+import {
+  buildDefaultTags,
+  createId,
+  getBucketKey,
+  getTagStyle,
+  normalizePeriodLabel
+} from "./utils";
 
 declare global {
   interface Window {
@@ -152,8 +46,8 @@ export default function App() {
   );
   const [progressInput, setProgressInput] = useState<string>("");
   const [progressTargetId, setProgressTargetId] = useState<string>("");
-  const [addForm, setAddForm] = useState({
-    kind: "goal" as GoalPlanType,
+  const [addForm, setAddForm] = useState<AddFormState>({
+    kind: "goal",
     title: "",
     period: "На неделю",
     tags: "",
@@ -194,7 +88,7 @@ export default function App() {
       ]);
       setGoals(goalsResponse);
       setPlans(plansResponse);
-    } catch (error) {
+    } catch {
       setStatus("Не удалось загрузить данные. Попробуй еще раз.");
     } finally {
       setLoading(false);
@@ -444,9 +338,9 @@ export default function App() {
     if (!selectedId || !chatInput.trim()) {
       return;
     }
-    const newMessage: ChatMessage = {
+    const newMessage = {
       id: createId(),
-      author: "user",
+      author: "user" as const,
       text: chatInput.trim(),
       timestamp: new Date().toISOString()
     };
@@ -456,9 +350,9 @@ export default function App() {
         if (record.id !== selectedId) {
           return record;
         }
-        const newHistory: HistoryEntry = {
+        const newHistory = {
           id: createId(),
-          type: "chat",
+          type: "chat" as const,
           title: "Диалог с ассистентом",
           detail: newMessage.text,
           timestamp: newMessage.timestamp,
@@ -466,7 +360,7 @@ export default function App() {
             newMessage,
             {
               id: createId(),
-              author: "assistant",
+              author: "assistant" as const,
               text:
                 "Принято! Обновлю прогресс и запомню детали, если понадобится.",
               timestamp: new Date().toISOString()
@@ -523,391 +417,87 @@ export default function App() {
     return initial;
   }, [records]);
 
-  const tabContent = useMemo(() => {
+  const handleProgressInputChange = (value: string) => {
+    setProgressInput(value);
+    handleSuggestTarget(value);
+  };
+
+  const renderTabContent = () => {
     if (activeTab === "Цели" || activeTab === "Планы") {
       const list = activeTab === "Цели" ? goalRecords : planRecords;
       return (
-        <div className="list">
-          {list.length === 0 && !loading && <p>Записей пока нет.</p>}
-          {list.map((record) => (
-            <div className="card" key={record.id}>
-              <div>
-                <div className="card-title">{record.title}</div>
-                <div className="card-meta">
-                  <span>{record.period}</span>
-                  <span>·</span>
-                  <span>{new Date(record.createdAt).toLocaleString()}</span>
-                </div>
-                <div className="tag-list">
-                  {record.tags.map((tag) => (
-                    <span key={tag} className="tag" style={getTagStyle(tag)}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <div className="progress">
-                  <div className="progress-bar">
-                    <div
-                      className="progress-fill"
-                      style={{ width: `${record.progress}%` }}
-                    />
-                  </div>
-                  <span>{record.progress}%</span>
-                </div>
-              </div>
-              <div className="card-actions">
-                <button className="ghost" onClick={() => handleOpenRecord(record.id)}>
-                  Открыть
-                </button>
-                <button className="danger" onClick={() => handleDeleteRecord(record)}>
-                  Удалить
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <RecordsList
+          records={list}
+          loading={loading}
+          onOpen={handleOpenRecord}
+          onDelete={handleDeleteRecord}
+          getTagStyle={getTagStyle}
+        />
       );
     }
 
     if (activeTab === "Добавить") {
       return (
-        <div className="form">
-          <div className="form-row">
-            <label>Тип</label>
-            <select
-              value={addForm.kind}
-              onChange={(event) =>
-                setAddForm((prev) => ({
-                  ...prev,
-                  kind: event.target.value as GoalPlanType
-                }))
-              }
-            >
-              <option value="goal">Цель</option>
-              <option value="plan">План</option>
-            </select>
-          </div>
-          <div className="form-row">
-            <label>Название</label>
-            <input
-              type="text"
-              value={addForm.title}
-              onChange={(event) =>
-                setAddForm((prev) => ({ ...prev, title: event.target.value }))
-              }
-              placeholder="Например, выучить TypeScript"
-            />
-          </div>
-          <div className="form-row">
-            <label>Период</label>
-            <select
-              value={addForm.period}
-              onChange={(event) =>
-                setAddForm((prev) => ({
-                  ...prev,
-                  period: event.target.value
-                }))
-              }
-            >
-              {periodBuckets.map((bucket) => (
-                <option key={bucket.key} value={bucket.label}>
-                  {bucket.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-row">
-            <label>Теги</label>
-            <input
-              type="text"
-              value={addForm.tags}
-              onChange={(event) =>
-                setAddForm((prev) => ({ ...prev, tags: event.target.value }))
-              }
-              placeholder="работа, учеба, здоровье"
-            />
-          </div>
-          <div className="form-row">
-            <label>Описание</label>
-            <textarea
-              value={addForm.description}
-              onChange={(event) =>
-                setAddForm((prev) => ({
-                  ...prev,
-                  description: event.target.value
-                }))
-              }
-              placeholder="Дополнительные детали цели или плана"
-            />
-          </div>
-          <button onClick={handleAddRecord}>Добавить запись</button>
-        </div>
+        <AddRecordForm
+          formState={addForm}
+          onChange={setAddForm}
+          onSubmit={handleAddRecord}
+        />
       );
     }
 
     if (activeTab === "Дашборд") {
       return (
-        <div className="dashboard-grid">
-          {periodBuckets.map((bucket) => (
-            <div key={bucket.key} className="section">
-              <div className="section-header">
-                <h3>{bucket.label}</h3>
-                <span>{dashboardBuckets[bucket.key].length} задач</span>
-              </div>
-              <div className="tile-grid">
-                {dashboardBuckets[bucket.key].length === 0 && (
-                  <div className="tile empty">Нет записей</div>
-                )}
-                {dashboardBuckets[bucket.key].map((record) => (
-                  <button
-                    key={record.id}
-                    className="tile"
-                    onClick={() => handleOpenRecord(record.id)}
-                  >
-                    <div className="tile-title">{record.title}</div>
-                    <div className="progress">
-                      <div className="progress-bar">
-                        <div
-                          className="progress-fill"
-                          style={{ width: `${record.progress}%` }}
-                        />
-                      </div>
-                      <span>{record.progress}%</span>
-                    </div>
-                    <div className="tag-list">
-                      {record.tags.map((tag) => (
-                        <span key={tag} className="tag" style={getTagStyle(tag)}>
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <Dashboard
+          buckets={dashboardBuckets}
+          onOpen={handleOpenRecord}
+          getTagStyle={getTagStyle}
+        />
       );
     }
 
     return (
-      <div className="form">
-        <div className="form-row">
-          <label>Обновление прогресса</label>
-          <textarea
-            value={progressInput}
-            onChange={(event) => {
-              const next = event.target.value;
-              setProgressInput(next);
-              handleSuggestTarget(next);
-            }}
-            placeholder="Например: закончил первый модуль по аналитике, прогресс 35%"
-          />
-        </div>
-        <div className="form-row">
-          <label>Распознанная цель/план</label>
-          <select
-            value={progressTargetId}
-            onChange={(event) => setProgressTargetId(event.target.value)}
-          >
-            <option value="">Выберите запись</option>
-            {records.map((record) => (
-              <option key={record.id} value={record.id}>
-                {record.title} ({record.kind === "goal" ? "цель" : "план"})
-              </option>
-            ))}
-          </select>
-        </div>
-        <button onClick={handleProgressUpdate}>Сохранить обновление</button>
-      </div>
+      <UpdatesForm
+        progressInput={progressInput}
+        onProgressInputChange={handleProgressInputChange}
+        progressTargetId={progressTargetId}
+        onProgressTargetChange={setProgressTargetId}
+        records={records}
+        onSubmit={handleProgressUpdate}
+      />
     );
-  }, [
-    activeTab,
-    addForm,
-    dashboardBuckets,
-    goalRecords,
-    loading,
-    planRecords,
-    progressInput,
-    progressTargetId,
-    records
-  ]);
+  };
 
   return (
     <div className="app">
-      <header>
-        <div>
-          <h1>Routine Dashboard</h1>
-          <p>Все цели и планы в одном месте.</p>
-        </div>
-        {user && (
-          <div className="user-info">
-            <div>
-              <div className="user-name">
-                {user.firstName ?? user.username ?? "Пользователь"}
-              </div>
-              <div className="user-id">Telegram ID: {user.telegramUserId}</div>
-            </div>
-            <button className="ghost" onClick={handleLogout}>
-              Выйти
-            </button>
-          </div>
-        )}
-      </header>
+      <Header user={user} onLogout={handleLogout} />
 
-      {!user && (
-        <section className="auth">
-          <h2>Вход через Telegram</h2>
-          <p>Подключись, чтобы увидеть свои планы и цели.</p>
-          {botUsername ? (
-            <div id="telegram-login" />
-          ) : (
-            <div className="alert">
-              Укажи Telegram BotUsername в настройках.
-            </div>
-          )}
-        </section>
-      )}
+      {!user && <AuthSection botUsername={botUsername} />}
 
       {user && (
         <section className="dashboard">
-          <div className="tabs">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                className={tab === activeTab ? "tab active" : "tab"}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+          <TabsNav tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
           {loading && <div className="alert">Загрузка...</div>}
           {status && <div className="alert">{status}</div>}
 
-          {tabContent}
+          {renderTabContent()}
         </section>
       )}
 
       {selectedRecord && (
-        <div className="detail-overlay" onClick={() => setSelectedId(null)}>
-          <div
-            className="detail-panel"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="detail-main">
-              <div className="detail-header">
-                <div>
-                  <h2>{selectedRecord.title}</h2>
-                  <p>
-                    {selectedRecord.kind === "goal" ? "Цель" : "План"} ·{" "}
-                    {normalizePeriodLabel(selectedRecord.period)}
-                  </p>
-                </div>
-                <button className="ghost" onClick={() => setSelectedId(null)}>
-                  Закрыть
-                </button>
-              </div>
-
-              <div className="tag-list">
-                {selectedRecord.tags.map((tag) => (
-                  <span key={tag} className="tag" style={getTagStyle(tag)}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-
-              <div className="progress detail-progress">
-                <div className="progress-bar">
-                  <div
-                    className="progress-fill"
-                    style={{ width: `${selectedRecord.progress}%` }}
-                  />
-                </div>
-                <span>{selectedRecord.progress}%</span>
-              </div>
-
-              {selectedRecord.description && (
-                <p className="detail-description">
-                  {selectedRecord.description}
-                </p>
-              )}
-
-              <div className="detail-section">
-                <h3>Что сделано</h3>
-                <ul>
-                  {selectedRecord.history
-                    .filter((entry) => entry.type === "progress")
-                    .slice(0, 4)
-                    .map((entry) => (
-                      <li key={entry.id}>{entry.detail}</li>
-                    ))}
-                  {selectedRecord.history.filter(
-                    (entry) => entry.type === "progress"
-                  ).length === 0 && <li>Пока нет обновлений.</li>}
-                </ul>
-              </div>
-
-              <div className="detail-section">
-                <h3>Диалог с ассистентом</h3>
-                <div className="chat-box">
-                  {selectedRecord.history
-                    .filter((entry) => entry.type === "chat")
-                    .slice(0, 3)
-                    .map((entry) => (
-                      <div key={entry.id} className="chat-snippet">
-                        <strong>{entry.messages?.[0]?.author === "user" ? "Вы" : "Ассистент"}:</strong>{" "}
-                        {entry.detail}
-                      </div>
-                    ))}
-                  {selectedRecord.history.filter((entry) => entry.type === "chat")
-                    .length === 0 && <p>История диалога пока пуста.</p>}
-                </div>
-                <div className="chat-input">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(event) => setChatInput(event.target.value)}
-                    placeholder="Напишите сообщение ассистенту"
-                  />
-                  <button onClick={handleChatSend}>Отправить</button>
-                </div>
-              </div>
-            </div>
-
-            <div className="detail-history">
-              <h3>История</h3>
-              <div className="history-list">
-                {selectedRecord.history.length === 0 && (
-                  <div className="history-empty">История пока пуста.</div>
-                )}
-                {selectedRecord.history.map((entry) => (
-                  <button
-                    key={entry.id}
-                    className={
-                      entry.id === selectedHistoryId
-                        ? "history-item active"
-                        : "history-item"
-                    }
-                    onClick={() => setSelectedHistoryId(entry.id)}
-                  >
-                    <div className="history-title">{entry.title}</div>
-                    <div className="history-meta">
-                      {new Date(entry.timestamp).toLocaleString()}
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {selectedHistory && (
-                <div className="history-preview">
-                  <h4>{selectedHistory.title}</h4>
-                  <p>{selectedHistory.detail}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <DetailOverlay
+          record={selectedRecord}
+          selectedHistoryId={selectedHistoryId}
+          selectedHistory={selectedHistory}
+          onClose={() => setSelectedId(null)}
+          onSelectHistory={setSelectedHistoryId}
+          chatInput={chatInput}
+          onChatInputChange={setChatInput}
+          onChatSend={handleChatSend}
+          getTagStyle={getTagStyle}
+          normalizePeriodLabel={normalizePeriodLabel}
+        />
       )}
     </div>
   );
