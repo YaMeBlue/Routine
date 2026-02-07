@@ -17,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile("appsettings.dev.json", optional: false, reloadOnChange: true)
     .AddEnvironmentVariables();
 
 var configuration = builder.Configuration;
